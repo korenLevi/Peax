@@ -1,0 +1,8 @@
+pandas
+openpyxl
+anthropic
+streamlit
+requests
+python-dotenv
+streamlit-mic-recorder
+pytest

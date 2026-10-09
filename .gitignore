@@ -1,0 +1,11 @@
+.env
+credentials.json
+data/raw/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+# stray raw files in the project root
+/*.csv
+/*.zip
+/*.xlsx
