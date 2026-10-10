@@ -125,15 +125,26 @@ def airport_profile(params: ScoringParams, code: str) -> dict:
                  coverage=[] if r["confidence"] != "low" else ["On-Time coverage is thin for this airport; delay metrics are unreliable."])
 
 
+LIVE_NOW_NOTE = "live_now is the FAA NAS status at request time; it is context only and not part of any score."
+
+
+def _live_context(code: str) -> dict:
+    """Current FAA NAS status for one airport. One cached XML fetch serves all airports."""
+    return live_apis.faa_nas_status(code)
+
+
 def compare_airports(params: ScoringParams, codes: list[str]) -> dict:
     scored = _scored(params)
     codes = [c.upper() for c in codes]
     missing = [c for c in codes if c not in set(scored["code"])]
     if missing:
         return _wrap({"error": f"Not in dataset: {missing}"})
-    return _wrap(scoring.compare(scored, codes), assumptions=[
+    data = scoring.compare(scored, codes)
+    data["live_now"] = {c: _live_context(c) for c in codes}
+    return _wrap(data, assumptions=[
         "Percentiles are among all US primary airports.",
         "Congestion is read from departure delays, taxi-out time, NAS delay, peak concentration and departures per runway.",
+        LIVE_NOW_NOTE,
     ])
 
 
@@ -163,9 +174,11 @@ def unmet_demand(params: ScoringParams, code: str) -> dict:
                        "pax_yoy": scoring._num(r["pax_yoy"]), "pax_cagr_2y": scoring._num(r["pax_cagr_2y"]),
                        "seats_growth_yoy": scoring._num(r.get("seats_growth_yoy")),
                        "runways_open": scoring._num(r["runways_open"]), "runways_7000ft_plus": scoring._num(r["runways_7000ft_plus"])}
+    data["live_now"] = _live_context(code)
     return _wrap(data, assumptions=[
         "Unmet demand is inferred, not observed: it is read from full seats, passengers outgrowing seats, and congestion indicators.",
         "Delay share tells where the constraint sits: NAS and late-aircraft delay are addressable by capacity; weather delay is not.",
+        LIVE_NOW_NOTE,
     ])
 
 
@@ -215,13 +228,13 @@ TOOL_SCHEMAS = [
      "description": "Full fact sheet for one airport: enplanements and growth, T-100 traffic, load factor, runways, delays, and the score breakdown with percentiles.",
      "input_schema": {"type": "object", "properties": {"code": {"type": "string", "description": "FAA/IATA 3-letter code"}}, "required": ["code"]}},
     {"name": "compare_airports",
-     "description": "Side-by-side congestion and demand metrics for 2 to 6 airports with percentiles among all US primary airports.",
+     "description": "Side-by-side congestion and demand metrics for 2 to 6 airports with percentiles among all US primary airports, plus the live FAA NAS status of each airport right now (live_now, not scored).",
      "input_schema": {"type": "object", "properties": {"codes": {"type": "array", "items": {"type": "string"}, "minItems": 2}}, "required": ["codes"]}},
     {"name": "long_haul_share",
      "description": "Share of departures that are long haul for one airport, at 1500/2500/3000 mile thresholds, split into passenger and freight aircraft.",
      "input_schema": {"type": "object", "properties": {"code": {"type": "string"}, "threshold_mi": {"type": "integer", "default": 2500}}, "required": ["code"]}},
     {"name": "unmet_demand",
-     "description": "Rule-based unmet demand indicators for one airport (load factor, passengers vs seats growth, delays, cancellations, runway use) and the delay mix that explains why.",
+     "description": "Rule-based unmet demand indicators for one airport (load factor, passengers vs seats growth, delays, cancellations, runway use), the delay mix that explains why, and the live FAA NAS status right now (live_now, not scored).",
      "input_schema": {"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]}},
     {"name": "live_status",
      "description": "Live snapshot: FAA NAS Status delay/closure programs for the airport right now and OpenSky count of aircraft near it. Not part of the score.",

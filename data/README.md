@@ -10,7 +10,7 @@ All row counts below were checked on 2026-10-09.
 ```
 raw/
   faa/          cy2023.xlsx, cy2024.xlsx, cy2025.xlsx
-  t100/         t100_segment_2025.zip (optional: t100_segment_2024.zip)
+  t100/         t100_segment_2025.csv, t100_segment_2024.csv
   ontime/       2025_01.csv ... 2025_12.csv
   ourairports/  airports.csv, runways.csv
   lookups/      aircraft_config.csv, service_class.csv
@@ -25,16 +25,12 @@ processed/
 
 - Identity: `code` (FAA location id), `bts_code` (IATA code used by BTS), `icao`, `name`, `state`, `hub` (L/M/S/N), `lat`, `lon`
 - FAA: `enpl_2023`, `enpl_2024`, `enpl_2025`, `pax_yoy`, `pax_cagr_2y`
-- T-100: `deps`, `seats`, `pax`, `freight_lbs`, `load_factor`, `intl_share_deps`, `freight_share_deps`, `avg_distance_mi`, `long_haul_share_{1500,2500,3000}` (and `_pax` / `_freight` splits), `seasonality_peak_ratio`, `seats_growth_yoy`, `deps_growth_yoy` (empty until the 2024 file exists)
+- T-100: `deps`, `seats`, `pax`, `freight_lbs`, `load_factor`, `intl_share_deps`, `freight_share_deps`, `avg_distance_mi`, `long_haul_share_{1500,2500,3000}` (and `_pax` / `_freight` splits), `seasonality_peak_ratio`, `seats_growth_yoy`, `deps_growth_yoy` (2025 vs 2024)
 - On-Time: `ot_flights`, `dep_del15_rate`, `taxi_out_mean`, `cancel_rate`, `nas_delay_per_flight`, `weather_delay_per_flight`, `late_aircraft_per_flight`, `carrier_delay_per_flight`, `peak_block_share`
 - OurAirports: `runways_open`, `runways_7000ft_plus` (open runways of 7,000 ft or more, a widebody/long-haul proxy; shorter runways still serve narrowbody jets), `longest_runway_ft`
 - Derived: `deps_per_runway`, `pax_per_runway`, `pax_growth_minus_seat_growth`
 
 FAA location ids and BTS codes differ for a few airports (IWA vs AZA, GPI vs FCA, DJT vs PBI). `build_features.py` resolves them through OurAirports `local_code` plus one manual override, and joins BTS files on `bts_code`.
-
-### Optional: T-100 for 2024
-
-Download the same T-100 Segment (All Carriers) table for year 2024 and save it as `raw/t100/t100_segment_2024.zip`. Rerun `etl/build_features.py`; `seats_growth_yoy` and `deps_growth_yoy` fill in and confidence moves from medium to high for well covered airports.
 
 ## 1. FAA commercial service enplanements
 
@@ -70,9 +66,12 @@ df = df[df["Rank"] != ""]
 
 | File | Source | Period | Rows |
 |---|---|---|---|
-| `raw/t100/t100_segment_2025.zip` | https://transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=Nv4+Pn44vr45&gnoyr_VQ=FMG | 2025, months 1 to 12 | 571,205 |
+| `raw/t100/t100_segment_2025.csv` | https://transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=Nv4+Pn44vr45&gnoyr_VQ=FMG (Year 2025) | 2025, months 1 to 12 | 571,205 |
+| `raw/t100/t100_segment_2024.csv` | Same page, Year 2024 | 2024, months 1 to 12 | 549,799 |
 
-The zip holds one file, `T_T100_SEGMENT_ALL_CARRIER.csv`. Read it directly from the zip. Column names are BTS database names:
+BTS delivers each year as a zip holding one file, `T_T100_SEGMENT_ALL_CARRIER.csv` (same name for every year, so check the `YEAR` column, not the name). Both years were extracted and renamed to `t100_segment_{year}.csv`. `build_features.py` also accepts `t100_segment_{year}.zip` if you keep the original download. 2025 drives every T-100 feature; 2024 is used only for `seats_growth_yoy` and `deps_growth_yoy` (without it those are empty and confidence tops out at medium).
+
+Both files have the same 21 columns. Column names are BTS database names:
 
 ```
 DEPARTURES_SCHEDULED, DEPARTURES_PERFORMED, SEATS, PASSENGERS, FREIGHT, DISTANCE, AIR_TIME,

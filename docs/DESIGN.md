@@ -14,13 +14,13 @@ An airport that scores high on both is where new capacity is most likely to be a
 | Source | What we take | Period | How it is used |
 |---|---|---|---|
 | FAA Commercial Service Enplanements (3 Excel files) | Enplanements per airport, hub class, state | CY2023 to CY2025 | Universe (402 primary airports), growth, scale |
-| BTS T-100 Segment, All Carriers | Departures, seats, passengers, freight, distance, aircraft config, service class, domestic/international flag | 2025 (2024 optional for seat growth) | Load factor, long haul mix, freight share, departures per runway |
+| BTS T-100 Segment, All Carriers | Departures, seats, passengers, freight, distance, aircraft config, service class, domestic/international flag | 2025, plus 2024 for seat and departure growth | Load factor, long haul mix, freight share, departures per runway |
 | BTS On-Time Reporting Carrier (12 monthly files, 7.0M flights) | DepDel15, TaxiOut, Cancelled, delay cause minutes, departure time block | 2025 | Congestion and delay mix |
 | OurAirports | Coordinates, runways (open, length) | Snapshot 2026-10-09 | Runway counts, ICAO code, bounding box for live data |
-| FAA NAS Status API (live) | Current ground stops, delay programs, closures | Now | Live layer in `live_status`, not scored |
+| FAA NAS Status API (live) | Current ground stops, delay programs, closures | Now | Attached as `live_now` to `compare_airports` and `unmet_demand`, and used by `live_status`; never scored |
 | OpenSky Network API (live) | Aircraft state vectors near the airport | Now | Live activity count, not scored |
 
-ETL runs once (`etl/ontime_aggregate.py`, `etl/build_features.py`) and writes `data/processed/airport_features.csv`, one row per FAA primary airport with 57 columns. The agent reads only that small table, so a chat turn never touches the 3 GB of raw files.
+ETL runs once (`etl/ontime_aggregate.py`, `etl/build_features.py`) and writes `data/processed/airport_features.csv`, one row per FAA primary airport with 60 columns. The agent reads only that small table, so a chat turn never touches the 3 GB of raw files.
 
 ## 3. Scoring methodology
 
@@ -36,7 +36,7 @@ Each component is a weighted mean of percentile ranks of its features within a p
 |---|---|---|---|
 | Demand | `pax_cagr_2y` (FAA enplanements, 2-year CAGR) | 0.35 | Growth is the strongest signal that capacity will be used |
 | Demand | `load_factor` (T-100 scheduled passenger service) | 0.30 | Full seats mean airlines cannot grow without adding flights |
-| Demand | `seats_growth_yoy` (T-100, needs 2024 file) | 0.15 | Airlines adding seats is revealed demand |
+| Demand | `seats_growth_yoy` (T-100, 2025 vs 2024) | 0.15 | Airlines adding seats is revealed demand |
 | Demand | `log_enpl` (log10 of latest enplanements) | 0.20 | Scale guard so a 200K passenger airport with 40 percent growth does not top the list by itself |
 | Strain | `dep_del15_rate` | 0.25 | Share of departures delayed 15+ minutes |
 | Strain | `taxi_out_mean` | 0.25 | Minutes from gate to wheels up; direct queue signal |
@@ -74,7 +74,7 @@ Missing features are dropped and the remaining weights are renormalised, so an a
 | Understand the question, pick tools and arguments (region, codes, thresholds) | Claude (`claude-opus-5-5` by default, configurable) |
 | Compute every number, rank, percentile and verdict | Python (`agent/scoring.py`, `agent/tools.py`), unit tested |
 | Explain the result, state assumptions and confidence, handle follow-ups | Claude, constrained by the system prompt to use only tool output |
-| Live API calls | Python (`agent/live_apis.py`), results passed to Claude as data |
+| Live API calls | Python (`agent/live_apis.py`). FAA NAS status is attached automatically to congestion and unmet demand answers; OpenSky is called on "right now" questions. Results reach Claude as data |
 
 The system prompt forbids numbers that do not come from a tool result. Every tool response carries `assumptions` and `coverage_notes`, and the UI shows the raw tool JSON under each answer so an analyst can audit the narrative against the data. Conversation history is kept client side and replayed each turn, which is what makes follow-ups like "and what about BDL?" work.
 
@@ -97,8 +97,8 @@ The system prompt forbids numbers that do not come from a tool result. Every too
 - Runway counts from OurAirports are a weak proxy for airfield capacity; official FAA capacity benchmarks (ASPM) need an account and were not used.
 - FAA uses its own location ids while BTS uses IATA codes. The ETL resolves them through OurAirports (for example IWA to AZA, GPI to FCA) and one manual override (DJT to PBI). Two tiny airports stay unmatched.
 - Growth is measured over 2023 to 2025, a recovery period, so some growth reflects catch up rather than new demand.
-- Live APIs are snapshots and are never part of the score.
+- Live APIs are snapshots and are never part of the score. They are shown next to the historical analysis so the analyst sees today's conditions without the ranking changing from one hour to the next.
 
 ## 7. Next steps if this went beyond one day
 
-Seat growth from the T-100 2024 file (one download), FAA ASPM capacity benchmarks, gate counts from airport master plans, FAA CATS financial reports for an actual profitability proxy, and an evaluation set of analyst-graded answers to tune prompts and weights.
+FAA ASPM capacity benchmarks, gate counts from airport master plans, FAA CATS financial reports for an actual profitability proxy, and an evaluation set of analyst-graded answers to tune prompts and weights.

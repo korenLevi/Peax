@@ -1,8 +1,9 @@
-pandas
-openpyxl
-anthropic
-streamlit
-requests
-python-dotenv
-streamlit-mic-recorder
-pytest
+anthropic==0.125.0
+numpy==2.0.2
+openpyxl==3.1.5
+pandas==2.3.3
+pytest==8.4.2
+python-dotenv==1.2.1
+requests==2.32.5
+streamlit==1.50.0
+streamlit-mic-recorder==0.0.8

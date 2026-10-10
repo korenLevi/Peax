@@ -1,7 +1,7 @@
 """Build one feature row per FAA primary airport from the raw datasets.
 
 Run: python etl/build_features.py
-Reads:  data/raw/faa/*.xlsx, data/raw/t100/t100_segment_{2025,2024}.zip,
+Reads:  data/raw/faa/*.xlsx, data/raw/t100/t100_segment_{2025,2024}.csv (or .zip),
         data/raw/ourairports/*.csv, data/processed/ontime_by_airport.csv
 Writes: data/processed/airport_features.csv
 
@@ -73,8 +73,19 @@ def build_faa() -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------- T-100
-def read_t100(zip_path: str) -> pd.DataFrame:
-    with zipfile.ZipFile(zip_path) as z:
+def find_t100(year: int) -> str | None:
+    """T-100 for a year, as the BTS zip or the extracted CSV."""
+    for ext in ("zip", "csv"):
+        p = os.path.join(RAW, "t100", f"t100_segment_{year}.{ext}")
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def read_t100(path: str) -> pd.DataFrame:
+    if path.endswith(".csv"):
+        return pd.read_csv(path, usecols=T100_USECOLS)
+    with zipfile.ZipFile(path) as z:
         name = [n for n in z.namelist() if n.lower().endswith(".csv")][0]
         with z.open(name) as f:
             return pd.read_csv(f, usecols=T100_USECOLS)
@@ -193,13 +204,17 @@ def main() -> int:
     # BTS files are keyed by IATA code; FAA by its own location id. Join T-100/On-Time on bts_code.
     bts_key = lambda t: t.rename(columns={"code": "bts_code"})
 
-    t25 = t100_features(read_t100(os.path.join(RAW, "t100", "t100_segment_2025.zip")))
+    p25 = find_t100(2025)
+    if p25 is None:
+        print("ERROR: data/raw/t100/t100_segment_2025.csv (or .zip) not found", file=sys.stderr)
+        return 1
+    t25 = t100_features(read_t100(p25))
     print(f"T-100 2025 origins: {len(t25)}")
     df = df.merge(bts_key(t25), on="bts_code", how="left")
 
-    p24 = os.path.join(RAW, "t100", "t100_segment_2024.zip")
-    df["has_t100_2024"] = os.path.exists(p24)
-    if df["has_t100_2024"].iloc[0]:
+    p24 = find_t100(2024)
+    df["has_t100_2024"] = p24 is not None
+    if p24:
         t24 = t100_features(read_t100(p24), suffix="_2024")[["code", "deps_2024", "seats_2024", "pax_2024"]]
         df = df.merge(bts_key(t24), on="bts_code", how="left")
         df["seats_growth_yoy"] = df["seats"] / df["seats_2024"] - 1
