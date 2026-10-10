@@ -19,6 +19,9 @@ from agent.agent import AirportAgent
 from agent.cli import EXAMPLES
 
 st.set_page_config(page_title="Airport Investment Agent", page_icon="🛫", layout="wide")
+# Hide Streamlit's built-in Deploy button and the "File change: Rerun" prompt; neither is part of this app.
+st.markdown("<style>[data-testid='stAppDeployButton'],[data-testid='stStatusWidget']{display:none;}</style>",
+            unsafe_allow_html=True)
 
 try:
     from streamlit_mic_recorder import speech_to_text
